@@ -1,7 +1,34 @@
 <?php
 session_start();
-if(!isset($_SESSION['userid'])){
+if (!isset($_SESSION['userid'])) {
     header("location:login.php");
+    exit;
+}
+
+// CSRF token generate
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+include "koneksi.php";
+
+// Handle form submission
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (!hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        die('CSRF token validation failed');
+    }
+
+    $namaalbum = mysqli_real_escape_string($conn, trim($_POST['namaalbum']));
+    $deskripsi = mysqli_real_escape_string($conn, trim($_POST['deskripsi']));
+
+    if ($namaalbum !== '' && $deskripsi !== '') {
+        $sql = "INSERT INTO album (userid, namaalbum, deskripsi) VALUES ('{$_SESSION['userid']}', '{$namaalbum}', '{$deskripsi}')";
+        if (!mysqli_query($conn, $sql)) {
+            die('Error: ' . mysqli_error($conn));
+        }
+    } else {
+        echo "<script>alert('Semua kolom harus diisi.');</script>";
+    }
 }
 ?>
 
@@ -17,70 +44,59 @@ if(!isset($_SESSION['userid'])){
 </head>
 <body class="font-sans bg-gray-100">
 <div class="bg-white p-4">
-<?php include 'adminnavbar.php'; ?>
-        <h1 class="text-3xl text-center text-gray-800">Halaman Album</h1>
-        <p class="text-center mt-2">Selamat datang <b><?=$_SESSION['namalengkap']?></b></p>
-    </div>
+    <?php include 'adminnavbar.php'; ?>
+    <h1 class="text-3xl text-center text-gray-800">Halaman Album</h1>
+    <p class="text-center mt-2">Selamat datang <b><?= htmlspecialchars($_SESSION['namalengkap']) ?></b></p>
+</div>
 
-    <div class="container mx-auto mt-8 p-4">
+<div class="container mx-auto mt-8 p-4">
     <button id="btnTambahAlbum" class="bg-blue-500 text-white px-4 py-2 rounded mb-4">Tambah Album</button>
-    <form id="formTambahAlbum" action="tambah_album.php" method="post" class="mb-8" style="display: none;">
-            <table class="w-full">
-                <tr>
-                    <td class="py-2">Nama Album</td>
-                    <td><input type="text" name="namaalbum" id="namaalbum" class="border p-2 rounded"></td>
-                </tr>
-                <tr>
-                    <td class="py-2">Deskripsi</td>
-                    <td><input type="text" name="deskripsi" id="deskripsi" class="border p-2 rounded"></td>
-                </tr>
-                <tr>
-                    <td></td>
-                    <td><input type="submit" value="Tambah" class="bg-blue-500 text-white px-4 py-2 rounded"></td>
-                </tr>
-            </table>
-        </form>
+    <form id="formTambahAlbum" action="adminalbum.php" method="post" class="mb-8" style="display: none;">
+        <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+        <table class="w-full">
+            <tr>
+                <td class="py-2">Nama Album</td>
+                <td><input type="text" name="namaalbum" id="namaalbum" class="border p-2 rounded"></td>
+            </tr>
+            <tr>
+                <td class="py-2">Deskripsi</td>
+                <td><input type="text" name="deskripsi" id="deskripsi" class="border p-2 rounded"></td>
+            </tr>
+            <tr>
+                <td></td>
+                <td><input type="submit" value="Tambah" class="bg-blue-500 text-white px-4 py-2 rounded"></td>
+            </tr>
+        </table>
+    </form>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-    <?php
-    include "koneksi.php";
-    $userid=$_SESSION['userid'];
-    $sql=mysqli_query($conn,"select * from album where userid='$userid'");
-    while($data=mysqli_fetch_array($sql)){
-    ?>
-        <div class="bg-white border rounded-md overflow-hidden shadow-md transform transition-transform ease-in-out hover:scale-105">
-            <div class="p-4">
-                <a href="album_detail.php?albumid=<?= $data['albumid'] ?>" class="block">
-                    <h2 class="text-lg font-semibold mb-2"><?= $data['namaalbum'] ?></h2>
-                    <p class="text-sm text-gray-700 mb-2"><?= $data['deskripsi'] ?></p>
-                    <p class="text-xs text-gray-500">Tanggal dibuat: <?= $data['tanggaldibuat'] ?></p>
-                </a>
-                <div class="mt-4 flex justify-between">
-                    <a href="hapus_album.php?albumid=<?= $data['albumid'] ?>" class="text-red-500 hover:underline"><i class="fa-solid fa-trash"></i></a>
-                    <a href="edit_album.php?albumid=<?= $data['albumid'] ?>" class="text-blue-500 hover:underline"><i class="fa-solid fa-pen-to-square"></i></a>
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <?php
+        $sql = "SELECT * FROM album WHERE userid='{$_SESSION['userid']}'";
+        $result = mysqli_query($conn, $sql);
+        if (!$result) {
+            die('Error: ' . mysqli_error($conn));
+        }
+        while ($data = mysqli_fetch_array($result)) {
+            ?>
+            <div class="bg-white border rounded-md overflow-hidden shadow-md transform transition-transform ease-in-out duration-300 hover:scale-105">
+                <img src="path/to/image.jpg" alt="<?= htmlspecialchars($data['namaalbum']) ?>" class="w-full h-48 object-cover">
+                <div class="p-4">
+                    <h3 class="text-lg font-semibold"><?= htmlspecialchars($data['namaalbum']) ?></h3>
+                    <p><?= htmlspecialchars($data['deskripsi']) ?></p>
                 </div>
             </div>
-        </div>
-    <?php
-    }
-    ?>
-</div>
-<script>
-        document.getElementById("btnTambahAlbum").addEventListener("click", function() {
-            document.getElementById("formTambahAlbum").style.display = "block";
-        });
-
-        document.getElementById("formTambahAlbum").addEventListener("submit", function(event) {
-            var namaalbum = document.getElementById("namaalbum").value.trim();
-            var deskripsi = document.getElementById("deskripsi").value.trim();
-            
-            if (namaalbum === '' || deskripsi === '') {
-                alert("Semua kolom harus diisi.");
-                event.preventDefault();
-            }
-        });
-    </script>
-</div>
+            <?php
+        }
+        ?>
     </div>
+</div>
+
+<script>
+    document.getElementById('btnTambahAlbum').addEventListener('click', function() {
+        var form = document.getElementById('formTambahAlbum');
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    });
+</script>
+
 </body>
 </html>
